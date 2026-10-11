@@ -1,0 +1,1350 @@
+
+-- Amendoin's Hub
+local Players = game:GetService("Players")
+local UIS = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TeleportService = game:GetService("TeleportService")
+local HttpService = game:GetService("HttpService")
+
+local LocalPlayer = Players.LocalPlayer
+local playerGui = LocalPlayer:WaitForChild("PlayerGui")
+local PlaceId = game.PlaceId
+
+if playerGui:FindFirstChild("AmendoinHub") then
+	playerGui.AmendoinHub:Destroy()
+end
+
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "AmendoinHub"
+screenGui.ResetOnSpawn = false
+screenGui.IgnoreGuiInset = true
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+screenGui.Parent = playerGui
+
+-- Cores de amendoim
+local COLOR_CREAM       = Color3.fromRGB(235, 214, 178)
+local COLOR_PEANUT      = Color3.fromRGB(214, 178, 122)
+local COLOR_PEANUT_DARK = Color3.fromRGB(160, 116, 66)
+local COLOR_BROWN       = Color3.fromRGB(94, 60, 30)
+local COLOR_HIGHLIGHT   = Color3.fromRGB(255, 238, 200)
+local COLOR_GREEN       = Color3.fromRGB(140, 200, 110)
+local COLOR_RED         = Color3.fromRGB(200, 90, 80)
+
+-- =====================================================
+-- CONFIG ANTI-BOSS
+-- =====================================================
+local VelocidadeRun    = 2e15
+local DistanciaChegada = 4
+local IgnorarEixoY     = true
+local WalkSpeedFake    = 700
+local JumpPowerFake    = 260
+local NomeParte        = "SmartPromptPart"
+local NomePrompt       = "CarryAreaEgg"
+local TempoNoSpawn     = 0.3
+
+-- =====================================================
+-- CONFIG ESP
+-- =====================================================
+local maxEspDistance = 1000
+local targetRarityName = "Todos"
+
+-- =====================================================
+-- Drag
+-- =====================================================
+local function makeDraggable(gui, handle, onClick)
+	handle = handle or gui
+	local dragging, moved = false, false
+	local dragStart, startPos
+
+	handle.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = true
+			moved = false
+			dragStart = input.Position
+			startPos = gui.Position
+		end
+	end)
+
+	UIS.InputChanged:Connect(function(input)
+		if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
+			or input.UserInputType == Enum.UserInputType.Touch) then
+			local delta = input.Position - dragStart
+			if math.abs(delta.X) > 4 or math.abs(delta.Y) > 4 then
+				moved = true
+			end
+			gui.Position = UDim2.new(
+				startPos.X.Scale, startPos.X.Offset + delta.X,
+				startPos.Y.Scale, startPos.Y.Offset + delta.Y
+			)
+		end
+	end)
+
+	UIS.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch then
+			if dragging and not moved and onClick then
+				onClick()
+			end
+			dragging = false
+		end
+	end)
+end
+
+-- =====================================================
+-- Toggle Switch
+-- =====================================================
+local function createToggle(parent, text, position)
+	local frame = Instance.new("Frame")
+	frame.Name = "Toggle_" .. text:gsub("%s+", "_")
+	frame.Size = UDim2.new(1, -16, 0, 30)
+	frame.Position = position or UDim2.new(0, 8, 0, 8)
+	frame.BackgroundTransparency = 1
+	frame.ZIndex = 5
+	frame.Parent = parent
+
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.new(1, -60, 1, 0)
+	label.BackgroundTransparency = 1
+	label.Text = text
+	label.TextColor3 = COLOR_BROWN
+	label.Font = Enum.Font.GothamBold
+	label.TextSize = 14
+	label.TextXAlignment = Enum.TextXAlignment.Left
+	label.ZIndex = 5
+	label.Parent = frame
+
+	local switch = Instance.new("TextButton")
+	switch.Name = "Switch"
+	switch.Size = UDim2.new(0, 42, 0, 22)
+	switch.Position = UDim2.new(1, -42, 0.5, -11)
+	switch.BackgroundColor3 = COLOR_PEANUT_DARK
+	switch.Text = ""
+	switch.AutoButtonColor = false
+	switch.ZIndex = 5
+	switch.Parent = frame
+
+	local sCorner = Instance.new("UICorner")
+	sCorner.CornerRadius = UDim.new(1, 0)
+	sCorner.Parent = switch
+
+	local knob = Instance.new("Frame")
+	knob.Name = "Knob"
+	knob.Size = UDim2.new(0, 18, 0, 18)
+	knob.Position = UDim2.new(0, 2, 0.5, -9)
+	knob.BackgroundColor3 = COLOR_HIGHLIGHT
+	knob.ZIndex = 6
+	knob.Parent = switch
+
+	local kCorner = Instance.new("UICorner")
+	kCorner.CornerRadius = UDim.new(1, 0)
+	kCorner.Parent = knob
+
+	local state = false
+	local callbacks = {}
+
+	local function update()
+		local targetColor = state and COLOR_GREEN or COLOR_PEANUT_DARK
+		local targetPos = state and UDim2.new(1, -20, 0.5, -9) or UDim2.new(0, 2, 0.5, -9)
+		switch.BackgroundColor3 = targetColor
+		TweenService:Create(knob, TweenInfo.new(0.15, Enum.EasingStyle.Quad), {Position = targetPos}):Play()
+	end
+
+	switch.MouseButton1Click:Connect(function()
+		state = not state
+		update()
+		for _, cb in ipairs(callbacks) do
+			task.spawn(cb, state)
+		end
+	end)
+
+	return {
+		Frame = frame,
+		Set = function(v) state = v; update() end,
+		Get = function() return state end,
+		OnChanged = function(cb) table.insert(callbacks, cb) end,
+	}
+end
+
+-- =====================================================
+-- Botão Flutuante
+-- =====================================================
+local floatBtn = Instance.new("ImageButton")
+floatBtn.Name = "FloatButton"
+floatBtn.Size = UDim2.new(0, 56, 0, 56)
+floatBtn.Position = UDim2.new(0, 20, 0.5, -28)
+floatBtn.BackgroundColor3 = COLOR_PEANUT
+floatBtn.BackgroundTransparency = 0.15
+floatBtn.Image = "rbxassetid://132867553707331"
+floatBtn.ScaleType = Enum.ScaleType.Fit
+floatBtn.AutoButtonColor = false
+floatBtn.ZIndex = 10
+floatBtn.Parent = screenGui
+
+local floatCorner = Instance.new("UICorner")
+floatCorner.CornerRadius = UDim.new(1, 0)
+floatCorner.Parent = floatBtn
+
+local floatStroke = Instance.new("UIStroke")
+floatStroke.Color = COLOR_BROWN
+floatStroke.Thickness = 2
+floatStroke.Parent = floatBtn
+
+-- =====================================================
+-- Painel
+-- =====================================================
+local panel = Instance.new("Frame")
+panel.Name = "Panel"
+panel.Size = UDim2.new(0, 336, 0, 200)
+panel.Position = UDim2.new(0.5, -168, 0.5, -100)
+panel.BackgroundColor3 = COLOR_CREAM
+panel.BorderSizePixel = 0
+panel.Visible = false
+panel.ZIndex = 5
+panel.Parent = screenGui
+
+local panelCorner = Instance.new("UICorner")
+panelCorner.CornerRadius = UDim.new(0, 12)
+panelCorner.Parent = panel
+
+local panelStroke = Instance.new("UIStroke")
+panelStroke.Color = COLOR_BROWN
+panelStroke.Thickness = 2
+panelStroke.Parent = panel
+
+local bgImage = Instance.new("ImageLabel")
+bgImage.Name = "BackgroundImage"
+bgImage.Size = UDim2.new(1, 0, 1, 0)
+bgImage.BackgroundTransparency = 1
+bgImage.Image = "rbxassetid://132867553707331"
+bgImage.ScaleType = Enum.ScaleType.Crop
+bgImage.ImageTransparency = 0.35
+bgImage.ZIndex = 6
+bgImage.Parent = panel
+
+local bgCorner = Instance.new("UICorner")
+bgCorner.CornerRadius = UDim.new(0, 12)
+bgCorner.Parent = bgImage
+
+local titleBar = Instance.new("Frame")
+titleBar.Name = "TitleBar"
+titleBar.Size = UDim2.new(1, 0, 0, 30)
+titleBar.BackgroundColor3 = COLOR_PEANUT
+titleBar.BackgroundTransparency = 0.05
+titleBar.BorderSizePixel = 0
+titleBar.ZIndex = 8
+titleBar.Parent = panel
+
+local titleCorner = Instance.new("UICorner")
+titleCorner.CornerRadius = UDim.new(0, 12)
+titleCorner.Parent = titleBar
+
+local titleText = Instance.new("TextLabel")
+titleText.Size = UDim2.new(1, 0, 1, 0)
+titleText.BackgroundTransparency = 1
+titleText.Text = "Amendoin's Hub"
+titleText.TextColor3 = COLOR_BROWN
+titleText.Font = Enum.Font.GothamBold
+titleText.TextSize = 16
+titleText.ZIndex = 9
+titleText.Parent = titleBar
+
+local body = Instance.new("Frame")
+body.Name = "Body"
+body.Size = UDim2.new(1, 0, 1, -30)
+body.Position = UDim2.new(0, 0, 0, 30)
+body.BackgroundTransparency = 1
+body.ZIndex = 7
+body.Parent = panel
+
+local tabColumn = Instance.new("Frame")
+tabColumn.Name = "TabColumn"
+tabColumn.Size = UDim2.new(0, 96, 0, 154)
+tabColumn.Position = UDim2.new(0, 8, 0, 8)
+tabColumn.BackgroundTransparency = 1
+tabColumn.ZIndex = 7
+tabColumn.Parent = body
+
+local content = Instance.new("Frame")
+content.Name = "Content"
+content.Size = UDim2.new(0, 220, 0, 154)
+content.Position = UDim2.new(0, 110, 0, 8)
+content.BackgroundColor3 = COLOR_HIGHLIGHT
+content.BackgroundTransparency = 0.15
+content.BorderSizePixel = 0
+content.ZIndex = 7
+content.Parent = body
+
+local contentCorner = Instance.new("UICorner")
+contentCorner.CornerRadius = UDim.new(0, 8)
+contentCorner.Parent = content
+
+local bossContent = Instance.new("Frame")
+bossContent.Name = "BossTab"
+bossContent.Size = UDim2.new(1, 0, 1, 0)
+bossContent.BackgroundTransparency = 1
+bossContent.Visible = true
+bossContent.ZIndex = 8
+bossContent.Parent = content
+
+local bugBossToggle = createToggle(bossContent, "Bug Boss", UDim2.new(0, 8, 0, 8))
+
+local espContent = Instance.new("Frame")
+espContent.Name = "EspTab"
+espContent.Size = UDim2.new(1, 0, 1, 0)
+espContent.BackgroundTransparency = 1
+espContent.Visible = false
+espContent.ZIndex = 8
+espContent.Parent = content
+
+local espEggsToggle = createToggle(espContent, "ESP EGGS", UDim2.new(0, 8, 0, 8))
+
+local hopContent = Instance.new("Frame")
+hopContent.Name = "HopTab"
+hopContent.Size = UDim2.new(1, 0, 1, 0)
+hopContent.BackgroundTransparency = 1
+hopContent.Visible = false
+hopContent.ZIndex = 8
+hopContent.Parent = content
+
+local tabList = {
+	{ name = "⚪ • BOSS", frame = bossContent },
+	{ name = "⚪ • ESP",  frame = espContent  },
+	{ name = "⚪ • HOP",  frame = hopContent  },
+}
+
+local function selectTab(index)
+	for i, tab in ipairs(tabList) do
+		local btn = tab.button
+		if btn then
+			local selected = (i == index)
+			tab.frame.Visible = selected
+			btn.BackgroundColor3 = selected and COLOR_HIGHLIGHT or COLOR_PEANUT
+			btn.TextColor3 = selected and COLOR_PEANUT_DARK or COLOR_BROWN
+		end
+	end
+end
+
+for i, tab in ipairs(tabList) do
+	local btn = Instance.new("TextButton")
+	btn.Name = "TabBtn" .. i
+	btn.Size = UDim2.new(1, 0, 0, 34)
+	btn.Position = UDim2.new(0, 0, 0, (i - 1) * 40)
+	btn.BackgroundColor3 = COLOR_PEANUT
+	btn.BorderSizePixel = 0
+	btn.Text = tab.name
+	btn.TextColor3 = COLOR_BROWN
+	btn.Font = Enum.Font.GothamBold
+	btn.TextSize = 13
+	btn.AutoButtonColor = false
+	btn.ZIndex = 9
+	btn.Parent = tabColumn
+
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0, 8)
+	c.Parent = btn
+
+	tab.button = btn
+
+	btn.MouseButton1Click:Connect(function()
+		selectTab(i)
+	end)
+end
+
+selectTab(1)
+
+makeDraggable(floatBtn, floatBtn, function()
+	panel.Visible = not panel.Visible
+end)
+
+makeDraggable(panel, titleBar)
+
+-- =====================================================
+-- LÓGICA ANTI-BOSS
+-- =====================================================
+local Ativado = false
+local Character, Humanoid, RootPart
+local connRun = nil
+local walkOriginal, jumpOriginal
+local alvoAtual = nil
+
+local function AtualizarPersonagem()
+	Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+	Humanoid  = Character:WaitForChild("Humanoid")
+	RootPart  = Character:WaitForChild("HumanoidRootPart")
+end
+AtualizarPersonagem()
+
+LocalPlayer.CharacterAdded:Connect(function()
+	task.wait(0.5)
+	if connRun then connRun:Disconnect(); connRun = nil end
+	alvoAtual, walkOriginal, jumpOriginal = nil, nil, nil
+	AtualizarPersonagem()
+end)
+
+local function PararTeleporte()
+	if connRun then connRun:Disconnect(); connRun = nil end
+	if Humanoid and Humanoid.Parent then
+		if walkOriginal then Humanoid.WalkSpeed = walkOriginal end
+		if jumpOriginal then Humanoid.JumpPower = jumpOriginal end
+	end
+	alvoAtual = nil
+end
+
+local function TeleportarPara(posicaoAlvo, aoChegar)
+	if not RootPart or not Humanoid or not RootPart.Parent then return end
+	if connRun then connRun:Disconnect() end
+
+	if not walkOriginal then walkOriginal = Humanoid.WalkSpeed end
+	if not jumpOriginal then jumpOriginal = Humanoid.JumpPower end
+	Humanoid.WalkSpeed = WalkSpeedFake
+	Humanoid.JumpPower = JumpPowerFake
+	alvoAtual = posicaoAlvo
+
+	connRun = RunService.Heartbeat:Connect(function(dt)
+		if not RootPart or not RootPart.Parent or not Humanoid.Parent then
+			PararTeleporte(); return
+		end
+		local origem = RootPart.Position
+		local delta  = alvoAtual - origem
+		if IgnorarEixoY then delta = Vector3.new(delta.X, 0, delta.Z) end
+		local dist = delta.Magnitude
+
+		if dist <= DistanciaChegada then
+			RootPart.CFrame = CFrame.new(alvoAtual) * (RootPart.CFrame - RootPart.Position)
+			PararTeleporte()
+			if aoChegar then aoChegar() end
+			return
+		end
+
+		local passo   = math.min(VelocidadeRun * dt, dist)
+		local direcao = delta.Unit
+		local novaPos = origem + direcao * passo
+		if IgnorarEixoY then
+			novaPos = Vector3.new(novaPos.X, origem.Y, novaPos.Z)
+		end
+
+		local lookDir = direcao
+		if lookDir.Magnitude < 0.001 then lookDir = Vector3.new(0, 0, 1) end
+		RootPart.CFrame = CFrame.lookAt(novaPos, novaPos + lookDir)
+	end)
+end
+
+local function GetSpawnLocation()
+	return Workspace:FindFirstChildOfClass("SpawnLocation")
+end
+
+local promptsConectados = setmetatable({}, {__mode = "k"})
+local executando = false
+
+local function ConectarPrompt(prompt)
+	if promptsConectados[prompt] then return end
+	promptsConectados[prompt] = true
+
+	prompt.Triggered:Connect(function()
+		if not Ativado then return end
+		if executando then return end
+		if not RootPart or not RootPart.Parent then return end
+
+		local spawn = GetSpawnLocation()
+		if not spawn then return end
+
+		executando = true
+		local posicaoSalva = RootPart.Position
+
+		TeleportarPara(spawn.Position, function()
+			task.wait(TempoNoSpawn)
+			if not Ativado then executando = false; return end
+			TeleportarPara(posicaoSalva, function()
+				executando = false
+			end)
+		end)
+	end)
+end
+
+local function VerificarPart(part)
+	if part.Name ~= NomeParte then return end
+	for _, child in ipairs(part:GetChildren()) do
+		if child:IsA("ProximityPrompt") and child.Name == NomePrompt then
+			ConectarPrompt(child)
+		end
+	end
+end
+
+local function EscanearTudo()
+	for _, obj in ipairs(Workspace:GetDescendants()) do
+		if obj.Name == NomeParte then VerificarPart(obj) end
+	end
+end
+
+Workspace.DescendantAdded:Connect(function(obj)
+	if not Ativado then return end
+	if obj.Name == NomeParte then
+		task.wait(0.05); VerificarPart(obj)
+	elseif obj:IsA("ProximityPrompt") and obj.Name == NomePrompt then
+		task.wait(0.05)
+		local p = obj.Parent
+		while p and p ~= Workspace do
+			if p.Name == NomeParte then ConectarPrompt(obj); break end
+			p = p.Parent
+		end
+	end
+end)
+
+bugBossToggle.OnChanged(function(state)
+	Ativado = state
+	if Ativado then
+		EscanearTudo()
+	else
+		PararTeleporte()
+		executando = false
+	end
+end)
+
+-- =====================================================
+-- LÓGICA ESP EGGS
+-- =====================================================
+local EggState, AreasData, RarityData, AssetsData, PetsData
+pcall(function() EggState = require(ReplicatedStorage.Client.EggState) end)
+pcall(function() AreasData = require(ReplicatedStorage.Data.Areas) end)
+pcall(function() RarityData = require(ReplicatedStorage.Data.Rarity) end)
+pcall(function() AssetsData = require(ReplicatedStorage.Data.Assets) end)
+pcall(function() PetsData = require(ReplicatedStorage.Data.Pets) end)
+
+local RARITY_SCORE = {
+	["Light & Dark"] = 1300, ["Titan"] = 1100, ["Divine"] = 1000,
+	["Transcendent"] = 1000, ["Superior"] = 1000, ["Eternal"] = 900,
+	["Limited"] = 900, ["Secret"] = 800, ["Exotic"] = 800,
+	["Cosmic"] = 700, ["Exclusive"] = 700, ["Admin"] = 700,
+	["Mythic"] = 600, ["Mythical"] = 600, ["Prismatic"] = 600,
+	["Rainbow"] = 600, ["Squishy God"] = 600, ["BrainrotGod"] = 600,
+	["Legendary"] = 500, ["Epic"] = 400, ["Rare"] = 300,
+	["SuperRare"] = 200, ["Celestial"] = 200, ["Uncommon"] = 200,
+	["Basic"] = 100, ["Common"] = 100,
+}
+
+local RARITY_COLOR = {
+	["Light & Dark"] = Color3.fromRGB(255, 100, 255),
+	["Titan"]         = Color3.fromRGB(255, 60, 60),
+	["Divine"]        = Color3.fromRGB(255, 240, 120),
+	["Transcendent"]  = Color3.fromRGB(180, 200, 255),
+	["Superior"]      = Color3.fromRGB(255, 180, 80),
+	["Eternal"]       = Color3.fromRGB(120, 220, 255),
+	["Limited"]       = Color3.fromRGB(255, 150, 200),
+	["Secret"]        = Color3.fromRGB(255, 60, 60),
+	["Exotic"]        = Color3.fromRGB(180, 255, 100),
+	["Cosmic"]        = Color3.fromRGB(150, 100, 255),
+	["Exclusive"]     = Color3.fromRGB(255, 200, 60),
+	["Admin"]         = Color3.fromRGB(255, 50, 50),
+	["Mythic"]        = Color3.fromRGB(255, 100, 100),
+	["Mythical"]      = Color3.fromRGB(255, 100, 100),
+	["Prismatic"]     = Color3.fromRGB(255, 150, 255),
+	["Rainbow"]       = Color3.fromRGB(255, 180, 100),
+	["Legendary"]     = Color3.fromRGB(255, 200, 80),
+	["Epic"]          = Color3.fromRGB(180, 100, 255),
+	["Rare"]          = Color3.fromRGB(100, 180, 255),
+	["Uncommon"]      = Color3.fromRGB(100, 255, 150),
+	["Common"]        = Color3.fromRGB(200, 200, 200),
+}
+
+local iconCache = {}
+local assetInfoCache = {}
+local rarityNameCache = {}
+
+local function getAssetInfo(category)
+	if not category then return nil end
+	if assetInfoCache[category] ~= nil then return assetInfoCache[category] end
+	local info = AssetsData and (AssetsData.Directory or AssetsData)[category]
+	assetInfoCache[category] = info or false
+	return info or nil
+end
+
+local function getRarityName(record)
+	if not record then return "Common" end
+	local uid = record.Uid or record.BoundsCFrame
+	if uid and rarityNameCache[uid] then return rarityNameCache[uid] end
+
+	local name
+	if record.Rarity then
+		local r = record.Rarity
+		name = type(r) == "table" and (r.DisplayName or r._id or r.Name) or tostring(r)
+	else
+		local cat = record.AssetCategory or record.Category or record.Name
+		local info = cat and getAssetInfo(cat)
+		if info and info.Rarity then
+			local r = info.Rarity
+			name = type(r) == "table" and (r.DisplayName or r._id or r.Name) or tostring(r)
+		else
+			local areaData = AreasData and (AreasData.Directory or AreasData) and (AreasData.Directory or AreasData)[record.AreaId]
+			local rarity = areaData and areaData.Rarity
+			local rarityId = (type(rarity) == "table" and (rarity._id or rarity.DisplayName or rarity.Name))
+				or (type(rarity) == "string" and rarity) or "Common"
+			local rInfo = (RarityData and (RarityData.Rarities or RarityData) or {})[rarityId] or {}
+			name = (type(rInfo) == "table" and (rInfo.DisplayName or rInfo._id))
+				or (type(rarity) == "table" and rarity.DisplayName) or rarityId or "Common"
+		end
+	end
+	name = name or "Common"
+	if uid then rarityNameCache[uid] = name end
+	return name
+end
+
+local function mutationMultiplier(record)
+	local multiplier = 1
+	local mutations = record.Mutations or record.Mutation
+	if type(mutations) == "table" then
+		for _, mutation in pairs(mutations) do
+			if type(mutation) == "table" then
+				multiplier = multiplier * (tonumber(mutation.Multiplier or mutation.Value or mutation.Scale) or 1.5)
+			else
+				local text = tostring(mutation):lower()
+				if text:find("rainbow") then
+					multiplier = multiplier * 3
+				elseif text:find("gold") then
+					multiplier = multiplier * 2
+				elseif text:find("silver") then
+					multiplier = multiplier * 1.5
+				elseif text:find("parasite") or text:find("monstrous") then
+					multiplier = multiplier * 5
+				else
+					multiplier = multiplier * 1.25
+				end
+			end
+		end
+	elseif mutations then
+		multiplier = multiplier * 1.5
+	end
+	if record.HasParasite then multiplier = multiplier * 5 end
+	return multiplier
+end
+
+local function getEggValue(record)
+	local category = tostring(record.AssetCategory or record.Category or record.Name or "Egg")
+	local info = getAssetInfo(category)
+
+	local raw = tonumber(
+		record.Income or record.EarningRate or record.MoneyPerSecond
+		or record.MoneyPerSec or record.CashPerSecond or record.CPS
+		or record.Money or record.Cash or record.Value or record.Price
+	)
+
+	if (not raw or raw <= 0) and type(info) == "table" then
+		raw = tonumber(
+			info.Income or info.EarningRate or info.MoneyPerSecond
+			or info.MoneyPerSec or info.CashPerSecond or info.CPS
+			or info.Money or info.Cash or info.ProfileIncome
+			or info.SalePrice or info.Price
+		)
+		if (not raw or raw <= 0) and type(info.Egg) == "table" then
+			raw = tonumber(
+				info.Egg.Income or info.Egg.EarningRate or info.Egg.MoneyPerSecond
+				or info.Egg.Money or info.Egg.Cash or info.Egg.SalePrice
+			)
+		end
+	end
+	raw = tonumber(raw) or 0
+
+	local scale = tonumber(record.AssetScale or record.Scale or record.NestScale) or 1
+	local value = raw * scale * mutationMultiplier(record)
+
+	if value <= 0 then
+		local rarity = getRarityName(record)
+		local score = RARITY_SCORE[rarity] or 100
+		local area = tonumber(tostring(record.AreaId or ""):match("%d+")) or 50
+		value = score * math.max(area, 50) * math.max(scale, 1)
+	end
+	return value
+end
+
+local function formatarValor(v)
+	v = tonumber(v) or 0
+	if v >= 1e15 then return string.format("%.1fQ", v/1e15)
+	elseif v >= 1e12 then return string.format("%.1fT", v/1e12)
+	elseif v >= 1e9  then return string.format("%.1fB", v/1e9)
+	elseif v >= 1e6  then return string.format("%.1fM", v/1e6)
+	elseif v >= 1e3  then return string.format("%.1fK", v/1e3)
+	else return string.format("%d", math.floor(v + 0.5)) end
+end
+
+local function getRarityColor(rarity)
+	return RARITY_COLOR[rarity] or Color3.fromRGB(220, 220, 220)
+end
+
+local function GetPetIcon(record)
+	if not record then return nil end
+
+	local targetName = record.Pet or record.PetId or record.PetName
+		or record.AssetCategory or record.Category or record.Name
+
+	if targetName then
+		local c = iconCache[targetName]
+		if c ~= nil then return c ~= false and c or nil end
+	end
+
+	local result
+
+	local rawIcon = record.Icon or record.PetIcon or record.ImageAsset
+		or record.TextureId or record.Thumbnail or record.Image
+	if rawIcon then
+		result = (type(rawIcon) == "number" or not string.match(tostring(rawIcon), "://"))
+			and ("rbxassetid://" .. tostring(rawIcon)) or tostring(rawIcon)
+	end
+
+	if not result and targetName and PetsData then
+		local pInfo = (PetsData.Directory or PetsData)[targetName]
+		if pInfo then
+			local img = pInfo.Icon or pInfo.Image or pInfo.AssetId
+				or pInfo.TextureId or pInfo.Thumbnail
+			if img then
+				result = (type(img) == "number" or not string.match(tostring(img), "://"))
+					and ("rbxassetid://" .. tostring(img)) or tostring(img)
+			end
+			if not result and type(pInfo.Pet) == "table" then
+				local p2 = pInfo.Pet
+				local img2 = p2.Icon or p2.Image or p2.AssetId or p2.TextureId
+				if img2 then
+					result = (type(img2) == "number" or not string.match(tostring(img2), "://"))
+						and ("rbxassetid://" .. tostring(img2)) or tostring(img2)
+				end
+			end
+		end
+	end
+
+	if not result and targetName then
+		local aInfo = getAssetInfo(targetName)
+		if aInfo then
+			local img = aInfo.Icon or aInfo.Image or aInfo.AssetId
+				or aInfo.TextureId or aInfo.Thumbnail
+			if img then
+				result = (type(img) == "number" or not string.match(tostring(img), "://"))
+					and ("rbxassetid://" .. tostring(img)) or tostring(img)
+			end
+			if not result and type(aInfo.Egg) == "table" then
+				local e = aInfo.Egg
+				local img2 = e.Icon or e.Image or e.AssetId or e.TextureId
+				if img2 then
+					result = (type(img2) == "number" or not string.match(tostring(img2), "://"))
+						and ("rbxassetid://" .. tostring(img2)) or tostring(img2)
+				end
+			end
+		end
+	end
+
+	if not result and targetName then
+		local folders = {
+			ReplicatedStorage:FindFirstChild("Assets"),
+			ReplicatedStorage:FindFirstChild("Images"),
+			ReplicatedStorage:FindFirstChild("Icons"),
+			ReplicatedStorage:FindFirstChild("Pets"),
+			ReplicatedStorage:FindFirstChild("Sprites"),
+		}
+		for _, folder in ipairs(folders) do
+			if folder then
+				local found = folder:FindFirstChild(targetName, true)
+				if found and found:IsA("Decal") then
+					result = found.Texture
+					break
+				elseif found and found:IsA("ImageLabel") then
+					result = found.Image
+					break
+				elseif found and found:IsA("StringValue") then
+					result = found.Value
+					break
+				end
+			end
+		end
+	end
+
+	if targetName then
+		iconCache[targetName] = result or false
+	end
+	return result
+end
+
+local ESPFolder = nil
+local activeESP = {}
+local espBindingName = "ESP_Ovos_Update"
+local espRunning = false
+
+local function criarESP(uid)
+	local part = Instance.new("Part")
+	part.Name = "ESP_" .. tostring(uid)
+	part.Anchored = true
+	part.CanCollide = false
+	part.CanQuery = false
+	part.CanTouch = false
+	part.Transparency = 1
+	part.Size = Vector3.new(0.1, 0.1, 0.1)
+	part.Parent = ESPFolder
+
+	local billboard = Instance.new("BillboardGui")
+	billboard.Name = "BB"
+	billboard.Size = UDim2.new(0, 150, 0, 48)
+	billboard.StudsOffset = Vector3.new(0, 2.5, 0)
+	billboard.AlwaysOnTop = true
+	billboard.LightInfluence = 0
+	billboard.MaxDistance = maxEspDistance
+	billboard.Parent = part
+
+	local container = Instance.new("Frame")
+	container.Size = UDim2.new(1, 0, 1, 0)
+	container.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
+	container.BackgroundTransparency = 0.25
+	container.BorderSizePixel = 0
+	container.Parent = billboard
+
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 5)
+	corner.Parent = container
+
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = Color3.fromRGB(46, 204, 113)
+	stroke.Thickness = 1
+	stroke.Transparency = 0.3
+	stroke.Parent = container
+
+	local icon = Instance.new("ImageLabel")
+	icon.Size = UDim2.new(0, 36, 0, 36)
+	icon.Position = UDim2.new(0, 6, 0.5, -18)
+	icon.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+	icon.BackgroundTransparency = 0.2
+	icon.BorderSizePixel = 0
+	icon.ScaleType = Enum.ScaleType.Fit
+	icon.Image = ""
+	icon.Parent = container
+
+	local iconCorner = Instance.new("UICorner")
+	iconCorner.CornerRadius = UDim.new(0, 4)
+	iconCorner.Parent = icon
+
+	local labelNome = Instance.new("TextLabel")
+	labelNome.Size = UDim2.new(1, -52, 0, 13)
+	labelNome.Position = UDim2.new(0, 48, 0, 4)
+	labelNome.BackgroundTransparency = 1
+	labelNome.TextColor3 = Color3.fromRGB(240, 240, 245)
+	labelNome.Font = Enum.Font.GothamBold
+	labelNome.TextSize = 10
+	labelNome.TextStrokeTransparency = 0.5
+	labelNome.TextXAlignment = Enum.TextXAlignment.Left
+	labelNome.TextTruncate = Enum.TextTruncate.AtEnd
+	labelNome.Text = "Ovo"
+	labelNome.Parent = container
+
+	local labelRarity = Instance.new("TextLabel")
+	labelRarity.Size = UDim2.new(1, -52, 0, 10)
+	labelRarity.Position = UDim2.new(0, 48, 0, 17)
+	labelRarity.BackgroundTransparency = 1
+	labelRarity.TextColor3 = Color3.fromRGB(200, 200, 200)
+	labelRarity.Font = Enum.Font.Gotham
+	labelRarity.TextSize = 9
+	labelRarity.TextStrokeTransparency = 0.5
+	labelRarity.TextXAlignment = Enum.TextXAlignment.Left
+	labelRarity.TextTruncate = Enum.TextTruncate.AtEnd
+	labelRarity.Text = "Common"
+	labelRarity.Parent = container
+
+	local labelValor = Instance.new("TextLabel")
+	labelValor.Size = UDim2.new(1, -52, 0, 14)
+	labelValor.Position = UDim2.new(0, 48, 0, 29)
+	labelValor.BackgroundTransparency = 1
+	labelValor.TextColor3 = Color3.fromRGB(255, 210, 80)
+	labelValor.Font = Enum.Font.GothamBlack
+	labelValor.TextSize = 12
+	labelValor.TextStrokeTransparency = 0.4
+	labelValor.TextXAlignment = Enum.TextXAlignment.Left
+	labelValor.Text = "$0"
+	labelValor.Parent = container
+
+	return {
+		part = part,
+		billboard = billboard,
+		container = container,
+		stroke = stroke,
+		icon = icon,
+		labelNome = labelNome,
+		labelRarity = labelRarity,
+		labelValor = labelValor,
+		_lastNome = "",
+		_lastRarity = "",
+		_lastValor = "",
+		_lastColor = nil,
+		_lastIcon = "",
+		_lastMaxDist = -1,
+	}
+end
+
+local function destruirESP(esp)
+	if esp and esp.part then
+		esp.part:Destroy()
+	end
+end
+
+local function atualizarESP()
+	if not EggState or not EggState.ReadFieldEggs then return end
+
+	local ok, snapshot = pcall(EggState.ReadFieldEggs)
+	if not ok or not snapshot or not snapshot.Records then return end
+
+	local char = LocalPlayer.Character
+	local hrp = char and char:FindFirstChild("HumanoidRootPart")
+	if not hrp then return end
+	local myPos = hrp.Position
+	local maxDistSq = maxEspDistance * maxEspDistance
+
+	local currentUids = {}
+
+	for _, record in ipairs(snapshot.Records) do
+		if record.State == "Slot" and record.BoundsCFrame then
+			local eggPos = record.BoundsCFrame.Position
+			local dx, dy, dz = eggPos.X - myPos.X, eggPos.Y - myPos.Y, eggPos.Z - myPos.Z
+			local distSq = dx*dx + dy*dy + dz*dz
+
+			if distSq <= maxDistSq then
+				local uid = record.Uid or tostring(record.BoundsCFrame)
+				local rarityName = getRarityName(record)
+
+				if targetRarityName == "Todos" or (rarityName:lower() == targetRarityName:lower()) then
+					currentUids[uid] = true
+
+					local esp = activeESP[uid]
+					if not esp then
+						esp = criarESP(uid)
+						activeESP[uid] = esp
+					end
+
+					esp.part.CFrame = CFrame.new(eggPos)
+
+					local nome = tostring(record.AssetCategory or record.Category or record.Name or "Ovo")
+					if esp._lastNome ~= nome then
+						esp.labelNome.Text = nome
+						esp._lastNome = nome
+					end
+
+					if esp._lastRarity ~= rarityName then
+						esp.labelRarity.Text = rarityName
+						esp._lastRarity = rarityName
+					end
+					local cor = getRarityColor(rarityName)
+					if esp._lastColor ~= cor then
+						esp.labelRarity.TextColor3 = cor
+						esp.stroke.Color = cor
+						esp._lastColor = cor
+					end
+
+					local iconAsset = GetPetIcon(record)
+					if iconAsset then
+						if esp._lastIcon ~= iconAsset then
+							esp.icon.Image = iconAsset
+							esp._lastIcon = iconAsset
+						end
+						if not esp.icon.Visible then esp.icon.Visible = true end
+					else
+						if esp.icon.Visible then esp.icon.Visible = false end
+					end
+
+					local valor = getEggValue(record)
+					local valorTexto = "$" .. formatarValor(valor)
+					if esp._lastValor ~= valorTexto then
+						esp.labelValor.Text = valorTexto
+						esp._lastValor = valorTexto
+					end
+
+					if esp._lastMaxDist ~= maxEspDistance then
+						esp.billboard.MaxDistance = maxEspDistance
+						esp._lastMaxDist = maxEspDistance
+					end
+				end
+			end
+		end
+	end
+
+	for uid, esp in pairs(activeESP) do
+		if not currentUids[uid] then
+			destruirESP(esp)
+			activeESP[uid] = nil
+		end
+	end
+end
+
+local function atualizarSeguro()
+	local ok, err = pcall(atualizarESP)
+	if not ok then warn("[ESP Ovos] " .. tostring(err)) end
+end
+
+local espLoopThread = nil
+
+local function iniciarESP()
+	if espRunning then return end
+	espRunning = true
+
+	if not ESPFolder or not ESPFolder.Parent then
+		ESPFolder = Instance.new("Folder")
+		ESPFolder.Name = "ESP_ListaOvos"
+		ESPFolder.Parent = (gethui and gethui()) or Workspace
+	end
+
+	pcall(function()
+		RunService:UnbindFromRenderStep(espBindingName)
+	end)
+	RunService:BindToRenderStep(espBindingName, Enum.RenderPriority.Camera.Value + 1, atualizarSeguro)
+
+	espLoopThread = task.spawn(function()
+		while espRunning do
+			task.wait(0.1)
+			if espRunning then atualizarSeguro() end
+		end
+	end)
+end
+
+local function pararESP()
+	if not espRunning then return end
+	espRunning = false
+
+	pcall(function()
+		RunService:UnbindFromRenderStep(espBindingName)
+	end)
+
+	for uid, esp in pairs(activeESP) do
+		destruirESP(esp)
+		activeESP[uid] = nil
+	end
+
+	if ESPFolder then
+		ESPFolder:Destroy()
+		ESPFolder = nil
+	end
+end
+
+espEggsToggle.OnChanged(function(state)
+	if state then
+		iniciarESP()
+	else
+		pararESP()
+	end
+end)
+
+-- =====================================================
+-- LÓGICA SERVER HOP (aba HOP)
+-- =====================================================
+local function httpGet(url)
+	if game and game.HttpGet then
+		local ok, result = pcall(function() return game:HttpGet(url) end)
+		if ok and result and #result > 0 then return true, result end
+	end
+	local ok2, result2 = pcall(function() return HttpService:GetAsync(url, true) end)
+	if ok2 and result2 and #result2 > 0 then return true, result2 end
+	return false, "HTTP falhou."
+end
+
+local hopFiltroOpts = {
+	{ label = "TODOS",        max = 999 },
+	{ label = "0-1",          max = 1 },
+	{ label = "0-3",          max = 3 },
+	{ label = "0-5",          max = 5 },
+	{ label = "0-10",         max = 10 },
+}
+local hopFiltroIdx = 1
+local currentServers = {}
+local listItems = {}
+
+-- Botão Filtro
+local btnFiltro = Instance.new("TextButton")
+btnFiltro.Size = UDim2.new(1, -12, 0, 20)
+btnFiltro.Position = UDim2.new(0, 6, 0, 4)
+btnFiltro.BackgroundColor3 = COLOR_PEANUT
+btnFiltro.BorderSizePixel = 0
+btnFiltro.Text = "Filtro: TODOS"
+btnFiltro.TextColor3 = COLOR_BROWN
+btnFiltro.Font = Enum.Font.GothamBold
+btnFiltro.TextSize = 11
+btnFiltro.AutoButtonColor = false
+btnFiltro.ZIndex = 9
+btnFiltro.Parent = hopContent
+
+local bfCorner = Instance.new("UICorner")
+bfCorner.CornerRadius = UDim.new(0, 5)
+bfCorner.Parent = btnFiltro
+
+-- Status
+local hopStatus = Instance.new("TextLabel")
+hopStatus.Size = UDim2.new(1, -12, 0, 12)
+hopStatus.Position = UDim2.new(0, 6, 0, 27)
+hopStatus.BackgroundTransparency = 1
+hopStatus.Text = "Pronto."
+hopStatus.TextColor3 = COLOR_PEANUT_DARK
+hopStatus.Font = Enum.Font.Gotham
+hopStatus.TextSize = 10
+hopStatus.TextXAlignment = Enum.TextXAlignment.Left
+hopStatus.TextTruncate = Enum.TextTruncate.AtEnd
+hopStatus.ZIndex = 9
+hopStatus.Parent = hopContent
+
+-- Botão Entrar no Melhor
+local btnEnter = Instance.new("TextButton")
+btnEnter.Size = UDim2.new(1, -12, 0, 22)
+btnEnter.Position = UDim2.new(0, 6, 0, 43)
+btnEnter.BackgroundColor3 = COLOR_PEANUT_DARK
+btnEnter.BorderSizePixel = 0
+btnEnter.Text = "Entrar no Melhor"
+btnEnter.TextColor3 = COLOR_HIGHLIGHT
+btnEnter.Font = Enum.Font.GothamBold
+btnEnter.TextSize = 11
+btnEnter.AutoButtonColor = false
+btnEnter.ZIndex = 9
+btnEnter.Parent = hopContent
+
+local beCorner = Instance.new("UICorner")
+beCorner.CornerRadius = UDim.new(0, 5)
+beCorner.Parent = btnEnter
+
+-- Botão Ver Lista
+local btnLista = Instance.new("TextButton")
+btnLista.Size = UDim2.new(1, -12, 0, 22)
+btnLista.Position = UDim2.new(0, 6, 0, 69)
+btnLista.BackgroundColor3 = COLOR_PEANUT
+btnLista.BorderSizePixel = 0
+btnLista.Text = "Ver Lista de Servidores"
+btnLista.TextColor3 = COLOR_BROWN
+btnLista.Font = Enum.Font.GothamBold
+btnLista.TextSize = 11
+btnLista.AutoButtonColor = false
+btnLista.ZIndex = 9
+btnLista.Parent = hopContent
+
+local blCorner = Instance.new("UICorner")
+blCorner.CornerRadius = UDim.new(0, 5)
+blCorner.Parent = btnLista
+
+-- Scroll da lista
+local hopScroll = Instance.new("ScrollingFrame")
+hopScroll.Size = UDim2.new(1, -12, 0, 57)
+hopScroll.Position = UDim2.new(0, 6, 0, 95)
+hopScroll.BackgroundColor3 = COLOR_CREAM
+hopScroll.BackgroundTransparency = 0.15
+hopScroll.BorderSizePixel = 0
+hopScroll.ScrollBarThickness = 3
+hopScroll.ScrollBarImageColor3 = COLOR_PEANUT_DARK
+hopScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+hopScroll.ZIndex = 9
+hopScroll.Parent = hopContent
+
+local hopScrollCorner = Instance.new("UICorner")
+hopScrollCorner.CornerRadius = UDim.new(0, 5)
+hopScrollCorner.Parent = hopScroll
+
+local hopLayout = Instance.new("UIListLayout")
+hopLayout.Padding = UDim.new(0, 2)
+hopLayout.SortOrder = Enum.SortOrder.LayoutOrder
+hopLayout.Parent = hopScroll
+
+local function clearList()
+	for _, item in ipairs(listItems) do item:Destroy() end
+	listItems = {}
+	hopScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+end
+
+local function addMsg(msg, color)
+	local lbl = Instance.new("TextLabel")
+	lbl.Size = UDim2.new(1, -4, 0, 18)
+	lbl.BackgroundTransparency = 1
+	lbl.Text = msg
+	lbl.TextColor3 = color or COLOR_PEANUT_DARK
+	lbl.Font = Enum.Font.Gotham
+	lbl.TextSize = 10
+	lbl.TextWrapped = true
+	lbl.TextXAlignment = Enum.TextXAlignment.Left
+	lbl.ZIndex = 10
+	lbl.Parent = hopScroll
+	table.insert(listItems, lbl)
+	hopScroll.CanvasSize = UDim2.new(0, 0, 0, #listItems * 20)
+end
+
+local function setStatus(txt, color)
+	hopStatus.Text = txt
+	hopStatus.TextColor3 = color or COLOR_PEANUT_DARK
+end
+
+local function fetchServers()
+	local url = "https://games.roblox.com/v1/games/" .. PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"
+	local ok, raw = httpGet(url)
+	if not ok or not raw or raw == "" then return nil end
+	local ok2, data = pcall(HttpService.JSONDecode, HttpService, raw)
+	if not ok2 or not data or not data.data then return nil end
+	local currentId = tostring(game.JobId)
+	local lista = {}
+	for _, s in ipairs(data.data) do
+		if s.id and tostring(s.id) ~= currentId and s.playing < s.maxPlayers then
+			table.insert(lista, {
+				id = tostring(s.id),
+				playing = s.playing or 0,
+				maxPlayers = s.maxPlayers or 0,
+				ping = s.ping or 0,
+			})
+		end
+	end
+	table.sort(lista, function(a, b) return a.playing < b.playing end)
+	return lista
+end
+
+local function verificarVaga(serverId)
+	local url = "https://games.roblox.com/v1/games/" .. PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"
+	local ok, raw = httpGet(url)
+	if not ok or not raw then return false, nil end
+	local ok2, data = pcall(HttpService.JSONDecode, HttpService, raw)
+	if not ok2 or not data or not data.data then return false, nil end
+	for _, s in ipairs(data.data) do
+		if tostring(s.id) == tostring(serverId) then
+			return (s.playing or 0) < (s.maxPlayers or 0), {
+				id = tostring(s.id), playing = s.playing or 0, maxPlayers = s.maxPlayers or 0
+			}
+		end
+	end
+	return false, nil
+end
+
+local function tentarTeleport(lista, maxTentativas)
+	maxTentativas = maxTentativas or 5
+	local t = 0
+	for _, s in ipairs(lista) do
+		if t >= maxTentativas then break end
+		t = t + 1
+		local temVaga, dados = verificarVaga(s.id)
+		if temVaga and dados then
+			setStatus("Tentando " .. t .. ": " .. dados.playing .. "/" .. dados.maxPlayers, COLOR_PEANUT_DARK)
+			local ok = pcall(function()
+				TeleportService:TeleportToPlaceInstance(PlaceId, dados.id, LocalPlayer)
+			end)
+			if ok then return true, dados end
+			task.wait(0.6)
+		end
+	end
+	return false, nil
+end
+
+local function aplicarFiltro(lista)
+	local opt = hopFiltroOpts[hopFiltroIdx]
+	local out = {}
+	for _, s in ipairs(lista) do
+		if s.playing <= opt.max then table.insert(out, s) end
+	end
+	return out
+end
+
+local function renderServers(lista)
+	clearList()
+	if not lista or #lista == 0 then
+		addMsg("Nenhum servidor com vaga.", COLOR_RED)
+		return
+	end
+	for _, s in ipairs(lista) do
+		local row = Instance.new("Frame")
+		row.Size = UDim2.new(1, -4, 0, 18)
+		row.BackgroundColor3 = COLOR_PEANUT
+		row.BackgroundTransparency = 0.25
+		row.BorderSizePixel = 0
+		row.ZIndex = 10
+		row.Parent = hopScroll
+		Instance.new("UICorner", row).CornerRadius = UDim.new(0, 4)
+
+		local info = Instance.new("TextLabel")
+		info.Size = UDim2.new(1, -50, 1, 0)
+		info.Position = UDim2.new(0, 5, 0, 0)
+		info.BackgroundTransparency = 1
+		info.Text = string.format("%d/%d", s.playing, s.maxPlayers)
+		info.TextColor3 = COLOR_BROWN
+		info.Font = Enum.Font.GothamBold
+		info.TextSize = 10
+		info.TextXAlignment = Enum.TextXAlignment.Left
+		info.ZIndex = 10
+		info.Parent = row
+
+		local joinBtn = Instance.new("TextButton")
+		joinBtn.Size = UDim2.new(0, 40, 0, 14)
+		joinBtn.Position = UDim2.new(1, -44, 0.5, -7)
+		joinBtn.BackgroundColor3 = COLOR_PEANUT_DARK
+		joinBtn.BorderSizePixel = 0
+		joinBtn.Text = "JOIN"
+		joinBtn.TextColor3 = COLOR_HIGHLIGHT
+		joinBtn.Font = Enum.Font.GothamBold
+		joinBtn.TextSize = 9
+		joinBtn.AutoButtonColor = false
+		joinBtn.ZIndex = 10
+		joinBtn.Parent = row
+		Instance.new("UICorner", joinBtn).CornerRadius = UDim.new(0, 4)
+
+		joinBtn.MouseButton1Click:Connect(function()
+			joinBtn.Text = "..."
+			local temVaga, dados = verificarVaga(s.id)
+			if not temVaga then
+				joinBtn.Text = "CHEIO"
+				setStatus("Server cheio.", COLOR_RED)
+				task.wait(1.5)
+				joinBtn.Text = "JOIN"
+				return
+			end
+			setStatus("Entrando...", COLOR_PEANUT_DARK)
+			local ok = pcall(function()
+				TeleportService:TeleportToPlaceInstance(PlaceId, dados.id, LocalPlayer)
+			end)
+			if not ok then
+				joinBtn.Text = "ERRO"
+				task.wait(1.5)
+				joinBtn.Text = "JOIN"
+			end
+		end)
+
+		table.insert(listItems, row)
+	end
+	hopScroll.CanvasSize = UDim2.new(0, 0, 0, #lista * 20)
+end
+
+btnFiltro.MouseButton1Click:Connect(function()
+	hopFiltroIdx = hopFiltroIdx + 1
+	if hopFiltroIdx > #hopFiltroOpts then hopFiltroIdx = 1 end
+	btnFiltro.Text = "Filtro: " .. hopFiltroOpts[hopFiltroIdx].label
+	if #currentServers > 0 then renderServers(aplicarFiltro(currentServers)) end
+end)
+
+btnEnter.MouseButton1Click:Connect(function()
+	btnEnter.Text = "Procurando..."
+	setStatus("Buscando o mais vazio...", COLOR_PEANUT_DARK)
+	task.wait(0.1)
+	local lista = fetchServers()
+	if not lista or #lista == 0 then
+		setStatus("Nenhum server com vaga.", COLOR_RED)
+		btnEnter.Text = "Entrar no Melhor"
+		return
+	end
+	local filtrada = aplicarFiltro(lista)
+	if #filtrada == 0 then filtrada = lista end
+	setStatus("Teleportando (top 5)...", COLOR_PEANUT_DARK)
+	local sucesso, dados = tentarTeleport(filtrada, 5)
+	if sucesso then
+		setStatus("Entrando em " .. dados.playing .. "/" .. dados.maxPlayers, COLOR_GREEN)
+	else
+		setStatus("Falha em todos os 5.", COLOR_RED)
+	end
+	btnEnter.Text = "Entrar no Melhor"
+end)
+
+btnLista.MouseButton1Click:Connect(function()
+	btnLista.Text = "Buscando..."
+	setStatus("Buscando servidores...", COLOR_PEANUT_DARK)
+	task.wait(0.1)
+	local lista = fetchServers()
+	if not lista or #lista == 0 then
+		setStatus("Nenhum server com vaga.", COLOR_RED)
+		btnLista.Text = "Ver Lista de Servidores"
+		return
+	end
+	currentServers = lista
+	local filtrada = aplicarFiltro(lista)
+	setStatus(#filtrada .. " servers. Clica JOIN.", COLOR_GREEN)
+	btnLista.Text = "Ver Lista de Servidores"
+	renderServers(filtrada)
+end)
+
+print("[Amendoin's Hub] Carregado. PlaceId:", PlaceId)
